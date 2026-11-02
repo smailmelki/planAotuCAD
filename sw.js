@@ -1,24 +1,43 @@
-// عامل الخدمة: يجعل التطبيق يعمل بلا إنترنت.
-// عند تحديث index.html غيّر رقم النسخة أدناه (v1 ← v2) ليتحدّث التطبيق عند المستخدم.
-const VER='plan-v3',CORE=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
+// عامل الخدمة: يجعل التطبيق يعمل بلا إنترنت بعد أول تحميل ناجح.
+const VER='plan-v8';
+const CORE=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
 
-self.addEventListener('install',e=>{
-  e.waitUntil(caches.open(VER).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
+self.addEventListener('install',event=>{
+  event.waitUntil(
+    caches.open(VER)
+      .then(cache=>cache.addAll(CORE))
+      .then(()=>self.skipWaiting())
+  );
 });
-self.addEventListener('activate',e=>{
-  e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==VER).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
+
+self.addEventListener('activate',event=>{
+  event.waitUntil(
+    caches.keys()
+      .then(keys=>Promise.all(keys.filter(key=>key!==VER).map(key=>caches.delete(key))))
+      .then(()=>self.clients.claim())
+  );
 });
-self.addEventListener('fetch',e=>{
-  const r=e.request;if(r.method!=='GET')return;
-  const u=new URL(r.url),same=u.origin===location.origin;
-  if(same){
-    // ملفات التطبيق: من الذاكرة فورًا مع تحديثها في الخلفية
-    e.respondWith(caches.match(r,{ignoreSearch:true}).then(hit=>{
-      const net=fetch(r).then(res=>{if(res&&res.ok)caches.open(VER).then(c=>c.put(r,res.clone()));return res}).catch(()=>hit);
-      return hit||net;
-    }));
-  }else if(/fonts\.(googleapis|gstatic)\.com$/.test(u.hostname)){
-    // الخط العربي: يُحفظ عند أول تحميل ثم يعمل بلا إنترنت
-    e.respondWith(caches.match(r).then(hit=>hit||fetch(r).then(res=>{caches.open(VER).then(c=>c.put(r,res.clone()));return res}).catch(()=>hit)));
+
+self.addEventListener('fetch',event=>{
+  const request=event.request;
+  if(request.method!=='GET')return;
+  const url=new URL(request.url);
+  if(url.origin===location.origin){
+    event.respondWith(
+      caches.match(request,{ignoreSearch:true}).then(cached=>{
+        const fresh=fetch(request).then(response=>{
+          if(response&&response.ok)caches.open(VER).then(cache=>cache.put(request,response.clone()));
+          return response;
+        }).catch(()=>cached);
+        return cached||fresh;
+      })
+    );
+  }else if(/fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)){
+    event.respondWith(
+      caches.match(request).then(cached=>cached||fetch(request).then(response=>{
+        caches.open(VER).then(cache=>cache.put(request,response.clone()));
+        return response;
+      }).catch(()=>cached))
+    );
   }
 });
