@@ -790,7 +790,7 @@ function impText(txt){
   $('#sheet').classList.remove('on');
 }
 function importFile(){try{$('#fin').click()}catch(e){io('import')}}
-async function handleImportFile(f,input){if(!f)return;let t;try{t=await(f.text?f.text():new Promise((rs,rj)=>{const r=new FileReader();r.onload=()=>rs(r.result);r.onerror=rj;r.readAsText(f)}))}catch(x){toast('تعذّرت قراءة الملف');return}if(input)input.value='';if(!t.trim()){toast('الملف فارغ');return}try{impText(t);$('#sheet').classList.remove('on');toast('تم استيراد الملف')}catch(x){toast(`لم أتعرف على «${f.name}»: تحقق من أن الملف JSON أو DXF ASCII`)}}
+async function handleImportFile(f,input){if(!f)return;let t;try{t=await(f.text?f.text():new Promise((rs,rj)=>{const r=new FileReader();r.onload=()=>rs(r.result);r.onerror=rj;r.readAsText(f)}))}catch(x){toast('تعذّرت قراءة الملف');return}if(input)input.value='';if(!t.trim()){toast('الملف فارغ');return}try{const isDxf=!/^\s*[\[{]/.test(t);impText(t);if(isDxf){toast('تمت قراءة ملف DXF؛ اختر وحدة القياس ثم اضغط «استيراد»')}else{$('#sheet').classList.remove('on');toast('تم استيراد الملف')}}catch(x){console.error('Import error:',x);toast(`لم أتعرف على «${f.name}»: تحقق من أن الملف JSON أو DXF ASCII`)}}
 $('#fin').onchange=e=>handleImportFile(e.target.files&&e.target.files[0],e.target);
 function exportChoice(){const sh=$('#sheet');sh.innerHTML='<b>تصدير المشروع</b><p>اختر صيغة الملف التي تريدها</p><div class="row"><button class="fl" id="exjson">JSON — ملف المشروع</button><button class="fl" id="exdxf">DXF — AutoCAD</button></div><button id="ok">رجوع</button>';$('#exjson').onclick=exportFile;$('#exdxf').onclick=exportDXF;$('#ok').onclick=projSheet;sh.classList.add('on')}
 function importChoice(){const sh=$('#sheet');sh.innerHTML='<b>استيراد</b><p>استيراد مشروع JSON أو ملف DXF، أو لصق محتوى الملف نصيًا.</p><div class="row"><label class="fl lb">اختيار ملف<input type="file" id="fin2" accept=".json,.dxf,.txt,application/json,application/dxf,text/plain"></label><button class="fl" id="pasteimp">لصق محتوى نصي</button></div><button id="ok">رجوع</button>';$('#fin2').onchange=e=>handleImportFile(e.target.files&&e.target.files[0],e.target);$('#pasteimp').onclick=()=>io('import');$('#ok').onclick=projSheet;sh.classList.add('on')}
@@ -1243,6 +1243,21 @@ function dxfShapes(E,k){
   const LYs=[...lm.values()];if(!LYs.length)LYs.push({id:uid(),name:'طبقة 1',vis:1,lock:0});
   return{shapes:out,LY:LYs,skip,meta:E.meta||{}};
 }
+// ضبط مجال العرض بعد استيراد DXF: نعتمد حدود الهندسة ونستبعد النصوص
+// من حساب التكبير حتى لا يبعد نص شارد المخطط عن الشاشة.
+function fitImportedView(items){
+  const geom=items.filter(s=>s.t!=='text'&&s.t!=='north');
+  const use=geom.length?geom:items;
+  if(!use.length)return;
+  const B=use.map(bx),x0=Math.min(...B.map(b=>b.x)),x1=Math.max(...B.map(b=>b.X)),
+    y0=Math.min(...B.map(b=>b.y)),y1=Math.max(...B.map(b=>b.Y));
+  const cx=(x0+x1)/2,cy=(y0+y1)/2;
+  const sw=Math.max(x1-x0,.5),sh=Math.max(y1-y0,.5);
+  const aw=Math.max(120,W-100),ah=Math.max(120,H-100);
+  V.s=clamp(Math.min(aw/sw,ah/sh),4,160);
+  V.x=W/2-cx*V.s;
+  V.y=H/2-cy*V.s;
+}
 function dxfImport(txt){
   const E=dxfEntities(txt),meta=E.meta||{},probe=dxfShapes(E,1);
   if(!probe.shapes.length){toast('لا توجد أشكال مدعومة في الملف');return}
@@ -1258,7 +1273,7 @@ function dxfImport(txt){
   info();
   sh.querySelectorAll('#dxu .chip').forEach(b=>{b.onclick=()=>{u=+b.dataset.v;sh.querySelectorAll('#dxu .chip').forEach(x=>x.classList.toggle('on',x===b));info()}});
   $('#dxx').onclick=()=>{sh.classList.remove('on');upd()};
-  $('#opk').onclick=()=>{const r=dxfShapes(E,u);sh.classList.remove('on');newP('DXF',r.shapes,{LY:r.LY,cl:r.LY[0].id});toast(`تم استيراد ${r.shapes.length} عنصرًا من DXF`)};
+  $('#opk').onclick=()=>{const r=dxfShapes(E,u);sh.classList.remove('on');newP('DXF',r.shapes,{LY:r.LY,cl:r.LY[0].id});fitImportedView(r.shapes);save();draw();toast(`تم استيراد ${r.shapes.length} عنصرًا من DXF`)};
   sh.classList.add('on');$('#ctx').style.display='none';
 }
 async function cloudDb(){
