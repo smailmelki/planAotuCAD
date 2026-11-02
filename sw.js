@@ -1,6 +1,6 @@
 // عامل الخدمة: يجعل التطبيق يعمل بلا إنترنت.
 // عند تحديث index.html غيّر رقم النسخة أدناه (v1 ← v2) ليتحدّث التطبيق عند المستخدم.
-const VER='plan-v1',CORE=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
+const VER='plan-v3',CORE=['./','index.html','manifest.json','icon-192.png','icon-512.png'];
 
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(VER).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));

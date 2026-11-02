@@ -108,7 +108,7 @@ nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;st
   <button id="lyb"><svg viewBox="0 0 24 24"><path d="M12 2l9 5-9 5-9-5z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>طبقات</button>
   <button id="snap"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM12 4v16M4 12h16"/></svg>التقاط</button>
 </nav>
-<input type="file" id="fin" accept=".json,application/json,text/*" hidden><div id="tt"></div>
+<input type="file" id="fin" hidden><div id="tt"></div>
 <div id="io" hidden><textarea id="iot" spellcheck="false"></textarea><p id="iop"></p><div class="row"><button class="fl" id="ioa"></button><button class="fl" id="iox">إغلاق</button></div></div>
 <div id="ov" hidden><img alt="المخطط"><p>اضغط مطولًا على الصورة لحفظها في هاتفك</p><button id="ovx">إغلاق</button></div>
 
@@ -119,7 +119,7 @@ const FONT='"IBM Plex Sans Arabic",system-ui,sans-serif',COLS=['','#dc2626','#ea
 const NM={end:'نهاية',mid:'منتصف',int:'تقاطع',cen:'مركز',qua:'ربع'};
 // الأشكال بالمتر: line{a,b} rect{x,y,w,h} circle{x,y,r} tri{p} free{p} + اختياري name,col,lw
 let shapes=[],redo=[],hist=nh(),sel=[],clip=[],tool='rect',cur=null,g=null,box=null,mk=null,V={x:24,y:24,s:40},dpr=1,W=0,H=0;
-let S={end:1,mid:1,int:1,cen:1,grid:1,ortho:0,polar:0,dyn:1},D={col:'',lw:2},ST={unit:'m',gs:0,axes:1,coord:1,grid:1,cloud:0,bk:0},cpos=null,furnKind='bed2',cloudT=0,cloudAt=0;
+let S={end:1,mid:1,int:1,cen:1,grid:1,ortho:0,polar:0,dyn:1},D={col:'',lw:2},ST={unit:'m',gs:0,axes:1,coord:1,grid:1,cloud:0,bk:0},cpos=null,furnKind='bed2',cloudT=0,cloudAt=0,fileHintT=0;
 const P=new Map();
 const f=n=>(Math.round(n*100)/100).toFixed(2).replace(/\.?0+$/,'');
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -654,9 +654,10 @@ function io(mode){
     a.onclick=()=>{t.focus();t.select();try{navigator.clipboard.writeText(t.value).catch(()=>{})}catch(e){}try{document.execCommand('copy')}catch(e){}m.textContent='تم تحديد النص. إن لم يُنسخ تلقائيًا فاضغط مطولًا واختر نسخ.'};
   }else{
     t.value='';a.textContent='استيراد';m.textContent='الصق نص المشروع هنا ثم اضغط استيراد';
+    try{navigator.clipboard.readText().then(s=>{if(s&&s.trim()&&!t.value){t.value=s;m.textContent='تم لصق محتوى الحافظة — اضغط استيراد'}}).catch(()=>{})}catch(e){}
     a.onclick=()=>{
       try{
-        const d=JSON.parse(t.value);if(!d||!Array.isArray(d.shapes))throw 0;
+        impText(t.value);o.hidden=true;return;
         const ok=d.shapes.filter(s=>s&&typeof s==='object'&&['line','wall','rect','circle','tri','free','door','win','dim','text','north','furn'].includes(s.t));
         newP(`${d.name||'مشروع'} (مستورد)`,ok);o.hidden=true;$('#sheet').classList.remove('on');
       }catch(e){m.textContent='النص غير صالح، تأكد أنك نسخته كاملًا'}
@@ -680,6 +681,8 @@ async function exportFile(){
   if(r==='ok')toast('تم حفظ الملف');else if(r==='text')io('export');
 }
 function impText(txt){
+  txt=String(txt).replace(/^\ufeff/,'');
+  if(!/^\s*[\[{]/.test(txt)){dxfImport(txt);return}
   const d=JSON.parse(txt);
   if(d&&Array.isArray(d.projects)){let n=0;d.projects.forEach(p=>{const q=p&&p.d;if(q&&Array.isArray(q.shapes)){newP(`${p.name||'مشروع'} (مستعاد)`,q.shapes,q.LY?{LY:q.LY,cl:q.cl}:null);n++}});if(!n)throw 0;$('#sheet').classList.remove('on');return}
   if(!d||!Array.isArray(d.shapes))throw 0;
@@ -687,10 +690,12 @@ function impText(txt){
   newP(`${d.name||'مشروع'} (مستورد)`,ok,d.LY&&d.LY.length?{LY:d.LY,cl:d.cl}:null);$('#sheet').classList.remove('on');
 }
 function importFile(){try{$('#fin').click()}catch(e){io('import')}}
-$('#fin').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{impText(await f.text());toast('تم فتح المشروع')}catch(x){toast('الملف غير صالح')}};
+$('#fin').onchange=async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;let t;try{t=await(f.text?f.text():new Promise((rs,rj)=>{const r=new FileReader();r.onload=()=>rs(r.result);r.onerror=rj;r.readAsText(f)}))}catch(x){toast('تعذّرت قراءة الملف');return}e.target.value='';
+  if(!t.trim()){toast('الملف فارغ');return}
+  try{impText(t);if(!$('#sheet').classList.contains('on'))toast('تم فتح المشروع')}catch(x){toast(`لم أتعرّف على «${f.name}»: يجب أن يكون ملف مشروع (JSON) أو نسخة احتياطية أو DXF`)}};
 function projSheet(){
   const sh=$('#sheet');
-  sh.innerHTML='<label>اسم المشروع<input id="pnm"></label><div class="pl"></div><div class="row"><button class="fl" id="pnew">جديد</button><button class="fl" id="pdup">تكرار</button><button class="fl" id="pdel">حذف</button></div><div class="row"><button class="fl" id="pexp">حفظ كملف</button><label class="fl lb">فتح ملف<input type="file" id="fin2" accept=".json,application/json,text/*"></label><button class="fl" id="ptxt">لصق نص</button></div><button id="ok">تم</button>';
+  sh.innerHTML='<label>اسم المشروع<input id="pnm"></label><div class="pl"></div><div class="row"><button class="fl" id="pnew">جديد</button><button class="fl" id="pdup">تكرار</button><button class="fl" id="pdel">حذف</button></div><div class="row"><button class="fl" id="pexp">حفظ كملف</button><label class="fl lb">فتح ملف<input type="file" id="fin2"></label><button class="fl" id="ptxt">لصق نص</button></div><div class="row"><button class="fl" id="pdxf">تصدير DXF (أوتوكاد)</button></div><button id="ok">تم</button>';
   const nm=$('#pnm'),pl=sh.querySelector('.pl');
   const fill=()=>{pl.textContent='';PJ.forEach(p=>{const b=document.createElement('button');b.className='pi'+(p.id===pid?' on':'');b.textContent=p.name||'بدون اسم';b.onclick=()=>{if(p.id!==pid){openP(p.id);nm.value=pname();fill()}};pl.append(b)})};
   nm.value=pname();fill();
@@ -703,7 +708,8 @@ function projSheet(){
     if(!armed){armed=1;b.textContent='تأكيد الحذف';setTimeout(()=>{armed=0;b.textContent='حذف'},3000);return}
     armed=0;b.textContent='حذف';delP();nm.value=pname();fill();
   };
-  $('#pexp').onclick=exportFile;$('#fin2').onchange=$('#fin').onchange;$('#ptxt').onclick=()=>io('import');
+  $('#pexp').onclick=exportFile;$('#fin2').onchange=e=>{clearTimeout(fileHintT);return $('#fin').onchange(e)};
+  $('#fin2').addEventListener('click',()=>{clearTimeout(fileHintT);fileHintT=setTimeout(()=>{if(document.hasFocus&&document.hasFocus())toast('لم تظهر نافذة الملفات؟ استعمل «لصق نص» بدلاً منها')},2500)});$('#ptxt').onclick=()=>io('import');$('#pdxf').onclick=exportDXF;
   $('#ok').onclick=()=>{sh.classList.remove('on');upd()};
   sh.classList.add('on');$('#ctx').style.display='none';
 }
@@ -810,7 +816,7 @@ function makePDF(jpg,wpx,hpx,wmm,hmm){
 async function saveBlob(name,blob){
   if(window.claude){
     let d=null;try{d=await claude.use('downloads')}catch(e){}
-    if(d){try{await d.save({filename:name,data:blob});return 'ok'}catch(e){return e&&e.code==='declined'?'no':'err'}}
+    if(d){try{await d.save({filename:name,data:blob});return 'ok'}catch(e){return e&&e.code==='declined'?'no':(e&&e.code==='rejected_extension'?'ext':'err')}}
     return 'err';
   }
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();a.remove();return 'ok';
@@ -900,6 +906,141 @@ function areaSheet(){
   sh.classList.add('on');$('#ctx').style.display='none';
 }
 // ---- نسخ احتياطي: سحابي (مساحة حسابك الخاصة في claude.ai) وملف لكل المشاريع ----
+// ---- DXF: تصدير واستيراد بصيغة ASCII R12 (تفتحها أوتوكاد ومعظم برامج CAD)، أما DWG فصيغة مغلقة فلا تُبنى داخل صفحة ويب ----
+function dxfBuild(){
+  const D=[],w=(c,v)=>{D.push(String(c),String(v))},n=v=>+v.toFixed(6),Yf=y=>n(-y),BS=String.fromCharCode(92);
+  const esc=s=>String(s).replace(/[^\x20-\x7e]/g,ch=>BS+'U+'+ch.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0'));
+  const lnames=LY.map((l,i)=>((l.name||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,20)||'Layer')+'_'+(i+1));
+  const lay=s=>{const i=LY.findIndex(l=>l.id===s.ly);return lnames[i<0?0:i]};
+  const aci=c=>({'#dc2626':1,'#ea580c':30,'#16a34a':3,'#2563eb':5,'#9333ea':6,'#0d9488':4,'#6b7280':8})[c]||7;
+  const ent=(t,s)=>{w(0,t);w(8,lay(s));w(62,aci(s.col))};
+  const P3=(c,q)=>{w(c,n(q[0]));w(c+10,Yf(q[1]));w(c+20,0)};
+  const line=(s,a,b)=>{ent('LINE',s);P3(10,a);P3(11,b)};
+  const poly=(s,P,closed)=>{ent('POLYLINE',s);w(66,1);w(10,0);w(20,0);w(30,0);w(70,closed?1:0);P.forEach(q=>{w(0,'VERTEX');w(8,lay(s));P3(10,q)});w(0,'SEQEND');w(8,lay(s))};
+  const circ=(s,c,r)=>{ent('CIRCLE',s);P3(10,c);w(40,n(r))};
+  const txt=(s,q,h,ang,str)=>{ent('TEXT',s);P3(10,q);w(40,n(h));w(1,esc(str));w(50,n(-ang*180/Math.PI))};
+  const rot=(c,a,u,v)=>[c[0]+u*Math.cos(a)-v*Math.sin(a),c[1]+u*Math.sin(a)+v*Math.cos(a)];
+  const arcPts=(c,r,a0,a1)=>{let d=a1-a0;d=Math.atan2(Math.sin(d),Math.cos(d));const o=[];for(let i=0;i<=12;i++){const t=a0+d*i/12;o.push([c[0]+r*Math.cos(t),c[1]+r*Math.sin(t)])}return o};
+  w(0,'SECTION');w(2,'HEADER');w(9,'$ACADVER');w(1,'AC1009');w(9,'$INSUNITS');w(70,6);w(0,'ENDSEC');
+  w(0,'SECTION');w(2,'TABLES');
+  w(0,'TABLE');w(2,'LTYPE');w(70,1);w(0,'LTYPE');w(2,'CONTINUOUS');w(70,0);w(3,'Solid line');w(72,65);w(73,0);w(40,0);w(0,'ENDTAB');
+  w(0,'TABLE');w(2,'STYLE');w(70,1);w(0,'STYLE');w(2,'STANDARD');w(70,0);w(40,0);w(41,1);w(50,0);w(71,0);w(42,0.2);w(3,'txt');w(4,'');w(0,'ENDTAB');
+  w(0,'TABLE');w(2,'LAYER');w(70,LY.length);
+  LY.forEach((l,i)=>{w(0,'LAYER');w(2,lnames[i]);w(70,l.lock?4:0);w(62,l.vis===0?-7:7);w(6,'CONTINUOUS')});
+  w(0,'ENDTAB');w(0,'ENDSEC');
+  w(0,'SECTION');w(2,'ENTITIES');
+  shapes.forEach(s=>{
+    if(s.t==='line')line(s,s.a,s.b);
+    else if(s.t==='wall'){const L=len(s)||1,ux=(s.b[0]-s.a[0])/L,uy=(s.b[1]-s.a[1])/L,h=s.th/2,nx=-uy*h,ny=ux*h;poly(s,[[s.a[0]+nx,s.a[1]+ny],[s.b[0]+nx,s.b[1]+ny],[s.b[0]-nx,s.b[1]-ny],[s.a[0]-nx,s.a[1]-ny]],true)}
+    else if(s.t==='rect')poly(s,rc(s),true);
+    else if(s.t==='circle')circ(s,[s.x,s.y],s.r);
+    else if(s.t==='tri')poly(s,s.p,true);
+    else if(s.t==='free'&&s.p.length>1)poly(s,s.p,false);
+    else if(s.t==='dim'&&len(s)>1e-6){
+      const d=dimPts(s),p=d[0],q=d[1];line(s,s.a,p);line(s,s.b,q);line(s,p,q);
+      let ang=Math.atan2(q[1]-p[1],q[0]-p[0]);if(ang>Math.PI/2||ang<-Math.PI/2)ang+=Math.PI;
+      const str=f(len(s)),h=.15,ux=Math.cos(ang),uy=Math.sin(ang),tw=str.length*h*.55,m=[(p[0]+q[0])/2,(p[1]+q[1])/2];
+      txt(s,[m[0]-ux*tw/2+uy*h*.35,m[1]-uy*tw/2-ux*h*.35],h,ang,str);
+    }
+    else if(s.t==='text'){const b=nb(s),a=s.a||0,u=[Math.cos(a),Math.sin(a)],dn=[-Math.sin(a),Math.cos(a)];txt(s,[s.x-u[0]*b.w/2+dn[0]*s.h*.35,s.y-u[1]*b.w/2+dn[1]*s.h*.35],s.h,a,s.txt||'')}
+    else if(s.t==='north'){const r=s.h/2,a=s.a||0,c=[s.x,s.y],T=(u,v)=>rot(c,a,u,v);circ(s,c,r);poly(s,[T(0,-.9*r),T(.35*r,.6*r),T(0,.25*r),T(-.35*r,.6*r)],true);txt(s,T(-.15*r,-1.55*r),r*.5,a,'N')}
+    else if(s.t==='door'||s.t==='win'){
+      const co=Math.cos(s.a),si=Math.sin(s.a),w2=s.w,th=s.th||0,T=(u,v)=>[s.x+co*u-si*v,s.y+si*u+co*v];
+      if(s.t==='win'){const hf=Math.max(.05,th/2);[-hf,0,hf].forEach(v=>line(s,T(-w2/2,v),T(w2/2,v)));line(s,T(-w2/2,-hf),T(-w2/2,hf));line(s,T(w2/2,-hf),T(w2/2,hf))}
+      else{const hu=-s.h*w2/2,of=th/2*s.f,H=T(hu,of),E=T(hu,of+s.f*w2),C=T(-hu,of);line(s,H,E);poly(s,arcPts(H,w2,Math.atan2(E[1]-H[1],E[0]-H[0]),Math.atan2(C[1]-H[1],C[0]-H[0])),false)}
+    }
+    else if(s.t==='furn'){
+      const d=SYM[s.k]||SYM.table,a=s.rot||0,c=[s.x+s.w/2,s.y+s.h/2],T=(u,v)=>rot(c,a,u*s.w,v*s.h);
+      d.p.forEach(p=>{
+        if(p[0]==='r')poly(s,[T(p[1],p[2]),T(p[1]+p[3],p[2]),T(p[1]+p[3],p[2]+p[4]),T(p[1],p[2]+p[4])],true);
+        else if(p[0]==='e'){const o=[];for(let i=0;i<24;i++){const t=i/24*2*Math.PI;o.push(T(p[1]+Math.abs(p[3])*Math.cos(t),p[2]+Math.abs(p[4])*Math.sin(t)))}poly(s,o,true)}
+        else line(s,T(p[1],p[2]),T(p[3],p[4]));
+      });
+    }
+  });
+  w(0,'ENDSEC');w(0,'EOF');
+  return D.join('\n')+'\n';
+}
+async function exportDXF(){
+  let txt;try{txt=dxfBuild()}catch(e){toast('تعذّر إنشاء ملف DXF');return}
+  const nm=pname().replace(/[^\p{L}\p{N} _.()-]+/gu,'').trim()||'plan';
+  let r=await saveBlob(nm+'.dxf',new Blob([txt],{type:'application/dxf'}));
+  if(r==='ext'){r=await saveBlob(nm+'.dxf.txt',new Blob([txt],{type:'text/plain'}));if(r==='ok')toast('حُفظ باسم ‎.dxf.txt — غيّر الامتداد إلى dxf قبل فتحه في أوتوكاد');return}
+  if(r==='ok')toast('تم حفظ ملف DXF');else if(r==='err')toast('الحفظ غير متاح هنا');
+}
+function dxfEntities(txt){
+  const a=txt.split(/\r?\n/),P=[];for(let i=0;i+1<a.length;i+=2)P.push([parseInt(a[i],10),a[i+1].trim()]);
+  let s=-1;for(let i=0;i<P.length-1;i++){if(P[i][0]===0&&P[i][1]==='SECTION'&&P[i+1][0]===2&&P[i+1][1]==='ENTITIES'){s=i+2;break}}
+  if(s<0)throw 0;
+  const E=[];let cur=null;
+  for(let i=s;i<P.length;i++){const[c,v]=P[i];if(c===0){if(v==='ENDSEC')break;cur={t:v,p:[]};E.push(cur)}else if(cur)cur.p.push([c,v])}
+  return E;
+}
+function dxfShapes(E,k){
+  const out=[],lm=new Map(),skip={},BS=String.fromCharCode(92),COL={1:'#dc2626',2:'#ca8a04',3:'#16a34a',4:'#0d9488',5:'#2563eb',6:'#9333ea',8:'#6b7280',30:'#ea580c'};
+  const lay=nm=>{nm=nm||'0';if(!lm.has(nm))lm.set(nm,{id:uid(),name:nm,vis:1,lock:0});return lm.get(nm).id};
+  const g=(e,c,d)=>{const q=e.p.find(z=>z[0]===c);return q?q[1]:d},N=(e,c)=>parseFloat(g(e,c,0))||0;
+  const X=v=>v*k,Y=v=>-v*k,cstrip=new RegExp(BS+BS+'[A-Za-z][^;]*;','g');
+  const dec=s=>String(s).split(BS+'U+').map((p,i)=>i?String.fromCharCode(parseInt(p.slice(0,4),16))+p.slice(4):p).join('').split(BS+'P').join(' ').replace(cstrip,'').replace(/[{}]/g,'').replace(/%%d/gi,'°').replace(/%%p/gi,'±').replace(/%%c/gi,'⌀');
+  const mk=(o,e)=>{o.ly=lay(g(e,8,'0'));const c=COL[parseInt(g(e,62,0))];if(c)o.col=c;o.lw=1.5;out.push(o)};
+  const eq=(a,b)=>Math.abs(a-b)<1e-5;
+  const polyShape=(pts,closed,e)=>{
+    if(pts.length<2)return;
+    if(closed&&pts.length===4){
+      const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+      if((eq(pts[0][0],pts[1][0])&&eq(pts[1][1],pts[2][1])&&eq(pts[2][0],pts[3][0])&&eq(pts[3][1],pts[0][1]))||(eq(pts[0][1],pts[1][1])&&eq(pts[1][0],pts[2][0])&&eq(pts[2][1],pts[3][1])&&eq(pts[3][0],pts[0][0]))){
+        const x=Math.min(...xs),y=Math.min(...ys);mk({t:'rect',x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y},e);return;
+      }
+    }
+    if(closed&&pts.length===3){mk({t:'tri',p:pts},e);return}
+    if(!closed&&pts.length===2){mk({t:'line',a:pts[0],b:pts[1]},e);return}
+    mk({t:'free',p:closed?pts.concat([pts[0]]):pts},e);
+  };
+  for(let i=0;i<E.length&&out.length<30000;i++){
+    const e=E[i];
+    if(e.t==='LINE')mk({t:'line',a:[X(N(e,10)),Y(N(e,20))],b:[X(N(e,11)),Y(N(e,21))]},e);
+    else if(e.t==='CIRCLE')mk({t:'circle',x:X(N(e,10)),y:Y(N(e,20)),r:X(N(e,40))},e);
+    else if(e.t==='ARC'){
+      const cx=N(e,10),cy=N(e,20),r=N(e,40);let a0=N(e,50),a1=N(e,51);if(a1<=a0)a1+=360;
+      const m=Math.max(6,Math.ceil((a1-a0)/10)),p=[];
+      for(let j=0;j<=m;j++){const t=(a0+(a1-a0)*j/m)*Math.PI/180;p.push([X(cx+r*Math.cos(t)),Y(cy+r*Math.sin(t))])}
+      mk({t:'free',p},e);
+    }
+    else if(e.t==='LWPOLYLINE'){
+      const pts=[];let x=null;e.p.forEach(q=>{if(q[0]===10)x=parseFloat(q[1]);else if(q[0]===20&&x!==null){pts.push([X(x),Y(parseFloat(q[1]))]);x=null}});
+      polyShape(pts,(parseInt(g(e,70,0))||0)&1,e);
+    }
+    else if(e.t==='POLYLINE'){
+      const pts=[];let j=i+1;
+      while(j<E.length&&E[j].t==='VERTEX'){pts.push([X(parseFloat(g(E[j],10,0))||0),Y(parseFloat(g(E[j],20,0))||0)]);j++}
+      if(j<E.length&&E[j].t==='SEQEND')j++;
+      i=j-1;polyShape(pts,(parseInt(g(e,70,0))||0)&1,e);
+    }
+    else if(e.t==='TEXT'||e.t==='MTEXT'){
+      const str=dec(g(e,1,'')).trim();if(!str)continue;
+      const h=X(N(e,40))||.3,a=-N(e,50)*Math.PI/180,w2=str.length*h*.55,u=[Math.cos(a),Math.sin(a)],dn=[-Math.sin(a),Math.cos(a)],ix=X(N(e,10)),iy=Y(N(e,20));
+      mk({t:'text',x:ix+u[0]*w2/2-dn[0]*h*.35,y:iy+u[1]*w2/2-dn[1]*h*.35,h,a,txt:str},e);
+    }
+    else if(e.t!=='VERTEX'&&e.t!=='SEQEND')skip[e.t]=(skip[e.t]||0)+1;
+  }
+  const LYs=[...lm.values()];if(!LYs.length)LYs.push({id:uid(),name:'طبقة 1',vis:1,lock:0});
+  return{shapes:out,LY:LYs,skip};
+}
+function dxfImport(txt){
+  let E;try{E=dxfEntities(txt)}catch(e){throw 0}
+  const probe=dxfShapes(E,1);
+  if(!probe.shapes.length){toast('لا توجد أشكال مدعومة في الملف');return}
+  const R=probe.shapes.map(bx),ext=Math.max(Math.max(...R.map(q=>q.X))-Math.min(...R.map(q=>q.x)),Math.max(...R.map(q=>q.Y))-Math.min(...R.map(q=>q.y)));
+  let u=ext>3000?.001:ext>300?.01:1;
+  const sh=$('#sheet'),sk=Object.entries(probe.skip).map(([t,c])=>`${t}×${c}`).join(' ');
+  sh.innerHTML='<b>استيراد DXF</b><div id="dxi" style="color:var(--dim);font-size:12px"></div><b>وحدة الرسم في الملف</b><div class="chips" id="dxu">'+[[1,'متر'],[.01,'سنتيمتر'],[.001,'مليمتر']].map(([v,l])=>`<button class="chip${v===u?' on':''}" data-v="${v}">${l}</button>`).join('')+'</div><div class="row"><button class="fl" id="dxx">إلغاء</button><button class="fl" id="opk">استيراد</button></div>';
+  const info=()=>{$('#dxi').textContent=`${probe.shapes.length} شكلًا · حجم الرسم بعد التحويل ≈ ${f(ext*u)} م${sk?' · تُجوهل (غير مدعوم): '+sk:''}`};
+  info();
+  sh.querySelectorAll('#dxu .chip').forEach(b=>{b.onclick=()=>{u=+b.dataset.v;sh.querySelectorAll('#dxu .chip').forEach(x=>x.classList.toggle('on',x===b));info()}});
+  $('#dxx').onclick=()=>{sh.classList.remove('on');upd()};
+  $('#opk').onclick=()=>{const r=dxfShapes(E,u);sh.classList.remove('on');newP('DXF',r.shapes,{LY:r.LY,cl:r.LY[0].id});toast('تم استيراد DXF كمشروع جديد')};
+  sh.classList.add('on');$('#ctx').style.display='none';
+}
 async function cloudDb(){
   try{if(!window.claude)return null;const db=await claude.use('db'),us=await claude.use('user');if(!db||!us)return null;const id=await us.id();return id?{db,id}:null}catch(e){return null}
 }
