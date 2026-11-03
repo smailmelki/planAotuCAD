@@ -126,6 +126,7 @@ const NM={end:'نهاية',mid:'منتصف',int:'تقاطع',cen:'مركز',qua:
 // الأشكال بالمتر: line{a,b} rect{x,y,w,h} circle{x,y,r} tri{p} free{p} + اختياري name,col,lw
 let shapes=[],redo=[],hist=nh(),sel=[],clip=[],tool='rect',cur=null,polyDraft=null,g=null,box=null,mk=null,V={x:24,y:24,s:40},dpr=1,W=0,H=0;
 let polygonSides=6;let S={end:1,mid:1,int:1,cen:1,grid:1,ortho:0,polar:0,dyn:1},D={col:'',lw:2},ST={unit:'m',gs:0,axes:1,coord:1,grid:1,cloud:0,bk:0,showDims:0,showAreas:0},cpos=null,furnKind='bed2',cloudT=0,cloudAt=0,fileHintT=0;
+const toast=m=>{const t=$('#tt');if(!t)return;t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2600)};
 const P=new Map();
 let drawFlow=null;
 const f=n=>(Math.round(n*100)/100).toFixed(2).replace(/\.?0+$/,'');
@@ -211,13 +212,15 @@ function xCC(a,b){const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<1e-9||d>a
   const l=(a.r*a.r-b.r*b.r+d*d)/(2*d),h=Math.sqrt(Math.max(0,a.r*a.r-l*l)),mx=a.x+l*dx/d,my=a.y+l*dy/d;return[[mx-h*dy/d,my+h*dx/d],[mx+h*dy/d,my-h*dx/d]]}
 function osnap(p){
   const L=[],add=(q,k,r,ref)=>{if(S[k==='qua'?'cen':k])L.push({p:q,k,r,ref})};
-  for(const s of shapes){if(!shown(s))continue;if(s.t==='text'||s.t==='north'){add([s.x,s.y],'cen',3);continue}
+  // نتحقق فقط من الأشكال القريبة من الإصبع: التقاطع قرب النقطة يستلزم أن يمر الشكلان بجوارها
+  const tol=22/V.s+1e-9,near=shapes.filter(s=>{if(!shown(s))return false;const b=bx(s);return p[0]>=b.x-tol&&p[0]<=b.X+tol&&p[1]>=b.y-tol&&p[1]<=b.Y+tol});
+  for(const s of near){if(s.t==='text'||s.t==='north'){add([s.x,s.y],'cen',3);continue}
     if(s.t==='circle'){add([s.x,s.y],'cen',3);[[1,0],[-1,0],[0,1],[0,-1]].forEach(d=>add([s.x+d[0]*s.r,s.y+d[1]*s.r],'qua',3))}
     else if(s.t==='free'){add(s.p[0],'end',1);add(s.p[s.p.length-1],'end',1)}
     else{pts(s).forEach((q,i)=>add(q,'end',1,s.t==='dim'?undefined:{s,i}));segs(s).forEach((e,j)=>add([(e[0][0]+e[1][0])/2,(e[0][1]+e[1][1])/2],'mid',2,{s,i:j,m:1}));if(s.t==='rect')add([s.x+s.w/2,s.y+s.h/2],'cen',3)}
   }
-  for(let i=0;i<shapes.length;i++)for(let j=i+1;j<shapes.length;j++){
-    const A=shapes[i],B=shapes[j];if(!shown(A)||!shown(B))continue;
+  for(let i=0;i<near.length;i++)for(let j=i+1;j<near.length;j++){
+    const A=near[i],B=near[j];
     for(const a of segs(A)){for(const b of segs(B))xSS(a,b).forEach(q=>add(q,'int',0));if(B.t==='circle')xSC(a,B).forEach(q=>add(q,'int',0))}
     if(A.t==='circle'){for(const b of segs(B))xSC(b,A).forEach(q=>add(q,'int',0));if(B.t==='circle')xCC(A,B).forEach(q=>add(q,'int',0))}
   }
@@ -225,6 +228,7 @@ function osnap(p){
   for(const c of L){const d=Math.hypot((c.p[0]-p[0])*V.s,(c.p[1]-p[1])*V.s);if(d<=22&&d+c.r*3<bs){bs=d+c.r*3;best=c}}
   return best;
 }
+
 function snapPt(p){const o=osnap(p);mk=o;return o?o.p.slice():S.grid?[grid(p[0]),grid(p[1])]:p}
 
 function build(a,b){
@@ -479,7 +483,17 @@ const drawNames={line:'خط',wall:'جدار',dim:'بُعد',rect:'مستطيل',
 function drawPointFromInputs(){const x=num($('#diX').value),y=num($('#diY').value);if(!Number.isFinite(x)||!Number.isFinite(y)){toast('أدخل إحداثيي X وY بشكل صحيح');return null}return [nu(x),nu(y)]}
 function drawInputOpen(){return !!drawFlow}
 function drawInputStage(stage){if(!drawFlow)return;drawFlow.stage=stage;const t=drawFlow.tool,multi=['polyline','free'].includes(t),params=stage==='params';$('#diTitle').textContent=`${drawNames[t]||'رسم'} — ${stage==='first'?'النقطة الأولى':stage==='second'?'النقطة الثانية':params?'خصائص العنصر':'النقطة التالية'}`;$('#diHint').textContent=stage==='first'?'أدخل إحداثيات النقطة الأولى، أو المس/انقر موضعها على اللوحة.':stage==='second'?'أدخل إحداثيات النقطة الثانية، أو المس/انقر موضعها على اللوحة.':params?'أدخل الأبعاد المطلوبة، أو المس/انقر نقطة على اللوحة لتحديدها بصرياً.':'أدخل إحداثيات النقطة التالية أو اخترها على اللوحة. يمكنك إنهاء الرسم متى شئت.';$('#diFinish').style.display=multi&&drawFlow.points.length>=2?'':'none';$('#diSubmit').textContent=stage==='first'?'إدخال النقطة الأولى':stage==='second'&&!multi?'إدخال ورسم':params?'إدخال ورسم':'إضافة نقطة';$('#diCoords').style.display=params?'none':'grid';const specs={circle:[['r','نصف القطر',fu(1)]],arc:[['r','نصف القطر',fu(1)],['a0','زاوية البداية °',0],['a1','زاوية النهاية °',90]],ellipse:[['rx','نصف المحور X',fu(2)],['ry','نصف المحور Y',fu(1)],['rot','زاوية الدوران °',0]],polygon:[['r','نصف القطر',fu(1)],['sides','عدد الأضلاع',polygonSides],['ang','زاوية البداية °',0]]};$('#diExtra').innerHTML=params?(specs[t]||[]).map(([k,label,v])=>`<label>${label}<input data-param="${k}" type="number" step="any" inputmode="decimal" value="${v}"></label>`).join(''):'';$('#diExtra').style.display=params?'grid':'none';$('#diUnit').textContent=`الوحدة: ${ul()} — الإحداثيات بالنسبة إلى أصل المخطط`;$('#drawInput').classList.add('on');$('#diX').value='';$('#diY').value='';setTimeout(()=>{const f=params?$('#diExtra input'):$('#diX');if(f)f.focus({preventScroll:true})},30)}
-function startDrawFlow(t){if(['furn','dim','door','win'].includes(t))return;if(!['line','wall','rect','circle','arc','ellipse','tri','polygon','polyline','free','text','north'].includes(t))return;drawFlow={tool:t,stage:'first',points:[]};if(t==='polygon'){const v=prompt('عدد أضلاع المضلع (3 إلى 32)',String(polygonSides));if(v===null){drawFlow=null;return}polygonSides=clamp(Math.round(num(v)||6),3,32)}drawInputStage('first')}
+function sidesSheet(done){
+  const sh=$('#sheet');
+  sh.innerHTML='<b>عدد أضلاع المضلع</b><div class="chips" id="sdc">'+[3,4,5,6,8,10,12].map(n=>`<button class="chip${n===polygonSides?' on':''}" data-v="${n}">${n}</button>`).join('')+'</div><label>عدد آخر (3 إلى 32)<input id="sdn" dir="ltr" inputmode="numeric"></label><div class="row"><button class="fl" id="sdx">إلغاء</button><button class="fl" id="opk">متابعة</button></div>';
+  $('#sdn').value=polygonSides;
+  const fin=n=>{polygonSides=clamp(Math.round(n)||6,3,32);sh.classList.remove('on');upd();done()};
+  sh.querySelectorAll('#sdc .chip').forEach(b=>{b.onclick=()=>fin(+b.dataset.v)});
+  $('#sdx').onclick=()=>{drawFlow=null;sh.classList.remove('on');upd()};
+  $('#opk').onclick=()=>fin(num($('#sdn').value));
+  sh.classList.add('on');$('#ctx').style.display='none';
+}
+function startDrawFlow(t){if(['furn','dim','door','win'].includes(t))return;if(!['line','wall','rect','circle','arc','ellipse','tri','polygon','polyline','free','text','north'].includes(t))return;drawFlow={tool:t,stage:'first',points:[]};if(t==='polygon'){sidesSheet(()=>{if(drawFlow&&drawFlow.tool==='polygon')drawInputStage('first')});return}drawInputStage('first')}
 function closeDrawFlow(){drawFlow=null;$('#drawInput').classList.remove('on')}
 function addDrawPoint(q,fromInput=false){if(!drawFlow)return false;const t=drawFlow.tool;const p=fromInput?q:snapPt(q);if(drawFlow.stage==='first'){drawFlow.points=[p];if(['furn','text','north','door','win'].includes(t)){commitSinglePoint(p);return true}drawInputStage(['circle','arc','ellipse','polygon'].includes(t)?'params':'second');return true}
  if(drawFlow.stage==='params'){drawFlow.points.push(p);commitPointShape();return true}
