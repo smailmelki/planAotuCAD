@@ -543,7 +543,7 @@ function opts(){
 // ---- الأزرار ----
 $('#moveMode').onclick=()=>{touchMode='move';upd();draw()};
 $('#editMode').onclick=()=>{touchMode='edit';upd();draw()};
-$('[data-t]').forEach(b=>b.onclick=()=>{if(polyDraft)finishPolyline();closeDrawFlow();tool=b.dataset.t;if(tool==='select')touchMode='move';sel=[];hideDyn();if(tool==='trim')toast('المس الجزء المراد قصه من خط أو جدار');if(tool==='extend')toast('المس قرب طرف الخط أو الجدار لتمديده');$('#sheet').classList.remove('on');$$('.gm').forEach(m=>m.classList.remove('on'));upd();draw();startDrawFlow(tool)});
+$$('[data-t]').forEach(b=>b.onclick=()=>{if(polyDraft)finishPolyline();closeDrawFlow();tool=b.dataset.t;if(tool==='select')touchMode='move';sel=[];hideDyn();if(tool==='trim')toast('المس الجزء المراد قصه من خط أو جدار');if(tool==='extend')toast('المس قرب طرف الخط أو الجدار لتمديده');$('#sheet').classList.remove('on');$$('.gm').forEach(m=>m.classList.remove('on'));upd();draw();startDrawFlow(tool)});
 $('#snap').onclick=()=>{$$('.gm').forEach(m=>m.classList.remove('on'));$('#smenu').classList.toggle('on')};
 $$('[data-s]').forEach(b=>b.onclick=()=>{S[b.dataset.s]=S[b.dataset.s]?0:1;upd();save()});
 // تراجع/إعادة: كل حالة تحفظ الأشكال والطبقات معًا، وأي إجراء جديد يمسح قائمة الإعادة
