@@ -7,7 +7,7 @@ const FONT='"IBM Plex Sans Arabic",system-ui,sans-serif',COLS=['','#dc2626','#ea
 const NM={end:'نهاية',mid:'منتصف',int:'تقاطع',cen:'مركز',qua:'ربع'};
 // الأشكال بالمتر: line{a,b} rect{x,y,w,h} circle{x,y,r} tri{p} free{p} + اختياري name,col,lw
 let shapes=[],redo=[],hist=nh(),sel=[],clip=[],tool='rect',cur=null,polyDraft=null,g=null,box=null,mk=null,V={x:24,y:24,s:40},dpr=1,W=0,H=0;
-let polygonSides=6;let S={end:1,mid:1,int:1,cen:1,grid:1,ortho:0,polar:0,dyn:1},D={col:'',lw:2},ST={unit:'m',gs:0,axes:1,coord:1,grid:1,cloud:0,bk:0,showDims:0,showAreas:0},cpos=null,furnKind='bed2',cloudT=0,cloudAt=0,fileHintT=0;
+let polygonSides=6;let S={end:1,mid:1,int:1,cen:1,grid:1,ortho:0,polar:0,dyn:1},D={col:'',lw:2},ST={unit:'m',gs:0,axes:1,coord:1,grid:1,cloud:0,bk:0,showDims:0,showAreas:0},cpos=null,furnKind='bed2',cloudT=0,cloudAt=0,fileHintT=0,touchMode='move',touchInputActive=matchMedia('(any-pointer: coarse)').matches;
 const toast=m=>{const t=$('#tt');if(!t)return;t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2600)};
 const P=new Map();
 let drawFlow=null;
@@ -28,7 +28,7 @@ function rotS(s,o,c,a){
 function selC(){const b=sel.map(i=>bx(shapes[i]));return[(Math.min(...b.map(q=>q.x))+Math.max(...b.map(q=>q.X)))/2,(Math.min(...b.map(q=>q.y))+Math.max(...b.map(q=>q.Y)))/2]}
 // المقابض: نقاط التعديل + مقبض التدوير فوق التحديد
 function grips(){
-  if(tool!=='select'||!sel.length||(g&&g.k==='box'))return[];
+  if(tool!=='select'||!sel.length||(g&&g.k==='box')||(touchInputActive&&touchMode==='move'))return[];
   const r=[],s=sel.length===1?shapes[sel[0]]:null,b=sel.map(i=>bx(shapes[i])),x0=Math.min(...b.map(q=>q.x)),x1=Math.max(...b.map(q=>q.X)),y0=Math.min(...b.map(q=>q.y)),top=w2s((x0+x1)/2,y0);
   if(!sel.every(i=>shapes[i].t==='door'||shapes[i].t==='win'))r.push({id:'rot',sp:[top[0],top[1]-34],top});
   const add=(id,p)=>r.push({id,sp:w2s(...p)});
@@ -339,7 +339,7 @@ function draw(){
   ctx.font=`400 11px ${FONT}`;ctx.textAlign='left';ctx.fillStyle=c.dim;ctx.fillText(fl(gs),12,H-26);
 }
 function upd(){
-  const n=sel.length;$('#pn').textContent=pname();
+  const n=sel.length;$('#pn').textContent=pname();$('#moveMode').hidden=!n;$('#editMode').hidden=!n;$('#moveMode').classList.toggle('on',touchMode==='move');$('#editMode').classList.toggle('on',touchMode==='edit');
   $('#tot').textContent=`المساحة الكلية ${f(shapes.reduce((a,s)=>a+(shown(s)&&!s.ex?area(s):0),0))} م² ▾`;
   $('#undo').disabled=!hist.length;$('#redo').disabled=!redo.length;$('#ctx').style.display=tool==='select'||n?'flex':'none';
   $('#op').disabled=$('#cp').disabled=$('#del').disabled=$('#rt').disabled=$('#scale').disabled=!n;$('#ps').disabled=!clip.length;
@@ -393,6 +393,7 @@ function finishPolyline(){if(polyDraft&&polyDraft.p.length>=2&&valid(polyDraft))
 $('#polyfinish').onclick=finishPolyline;$('#polycancel').onclick=()=>{polyDraft=null;$('#polybar').style.display='none';draw()};
 cv.addEventListener('dblclick',e=>{if(tool==='polyline'&&polyDraft){e.preventDefault();finishPolyline()}});
 cv.addEventListener('pointerdown',e=>{
+  touchInputActive=e.pointerType==='touch';
   cv.setPointerCapture(e.pointerId);P.set(e.pointerId,pos(e));
   if(P.size===2){
     const[a,b]=[...P.values()],m=[(a[0]+b[0])/2,(a[1]+b[1])/2];
@@ -411,8 +412,12 @@ cv.addEventListener('pointerdown',e=>{
       upd();draw();return;
     }
     const i=hit(...p);
-    if(i>=0){if(!sel.includes(i))sel=[i];g={k:'move',w0:s2w(...p),o:sel.map(j=>copy(shapes[j])),before:snapStr()}}
-    else{sel=[];g={k:'box',a:p}}
+    if(i>=0){
+      if(e.pointerType==='touch'&&!sel.includes(i)){sel=[i];g=null;upd();draw();return}
+      if(e.pointerType==='touch'&&touchMode==='edit'){g=null;upd();draw();return}
+      if(!sel.includes(i))sel=[i];
+      g={k:'move',w0:s2w(...p),o:sel.map(j=>copy(shapes[j])),before:snapStr()}
+    }else{sel=[];g={k:'box',a:p}}
   }else if(tool==='furn'){
     const a=snapPt(s2w(...p)),d=SYM[furnKind],s={t:'furn',k:furnKind,x:a[0]-d.w/2,y:a[1]-d.h/2,w:d.w,h:d.h,rot:0,ly:cl,col:D.col||undefined};
     snap();shapes.push(s);sel=[shapes.length-1];g={k:'move',w0:s2w(...p),o:[copy(s)],moved:1,numericPlace:1};mk=null;
@@ -536,7 +541,9 @@ function opts(){
 }
 
 // ---- الأزرار ----
-$$('[data-t]').forEach(b=>b.onclick=()=>{if(polyDraft)finishPolyline();closeDrawFlow();tool=b.dataset.t;sel=[];hideDyn();if(tool==='trim')toast('المس الجزء المراد قصه من خط أو جدار');if(tool==='extend')toast('المس قرب طرف الخط أو الجدار لتمديده');$('#sheet').classList.remove('on');$$('.gm').forEach(m=>m.classList.remove('on'));upd();draw();startDrawFlow(tool)});
+$('#moveMode').onclick=()=>{touchMode='move';upd();draw()};
+$('#editMode').onclick=()=>{touchMode='edit';upd();draw()};
+$('[data-t]').forEach(b=>b.onclick=()=>{if(polyDraft)finishPolyline();closeDrawFlow();tool=b.dataset.t;if(tool==='select')touchMode='move';sel=[];hideDyn();if(tool==='trim')toast('المس الجزء المراد قصه من خط أو جدار');if(tool==='extend')toast('المس قرب طرف الخط أو الجدار لتمديده');$('#sheet').classList.remove('on');$$('.gm').forEach(m=>m.classList.remove('on'));upd();draw();startDrawFlow(tool)});
 $('#snap').onclick=()=>{$$('.gm').forEach(m=>m.classList.remove('on'));$('#smenu').classList.toggle('on')};
 $$('[data-s]').forEach(b=>b.onclick=()=>{S[b.dataset.s]=S[b.dataset.s]?0:1;upd();save()});
 // تراجع/إعادة: كل حالة تحفظ الأشكال والطبقات معًا، وأي إجراء جديد يمسح قائمة الإعادة
