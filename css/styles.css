@@ -57,3 +57,13 @@ nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;st
 #ov[hidden]{display:none}
 #ov img{max-width:100%;max-height:70%;object-fit:contain;border:1px solid var(--bd);-webkit-touch-callout:default}
 #ov p{margin:0;color:var(--dim);text-align:center}
+
+/* وضعا التحريك وتعديل الشكل مخصصان للأجهزة ذات اللمس */
+#ctx .touch-mode{display:none}
+#ctx .touch-mode[hidden]{display:none!important}
+@media(any-pointer:coarse){
+  #ctx{left:8px;right:8px;bottom:8px;transform:none;max-width:none;gap:4px;padding:4px;z-index:4}
+  #ctx button{min-height:44px;flex:1 1 auto;padding:8px 6px}
+  #ctx .touch-mode{display:inline-flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--bd);border-radius:8px;font-weight:600}
+  #ctx .touch-mode.on{background:var(--tx);color:var(--ui);border-color:var(--tx)}
+}

@@ -24,7 +24,7 @@
 </header>
 <main>
   <canvas id="cv"></canvas>
-  <div id="ctx"><button id="op">خصائص</button><button id="cp">نسخ</button><button id="ps">لصق</button><button id="rt">تدوير</button><button id="scale">تحجيم</button><button id="del">حذف</button><button id="all">الكل</button></div>
+  <div id="ctx"><button id="moveMode" class="touch-mode" hidden>تحريك العنصر</button><button id="editMode" class="touch-mode" hidden>تعديل الشكل</button><button id="op">خصائص</button><button id="cp">نسخ</button><button id="ps">لصق</button><button id="rt">تدوير</button><button id="scale">تحجيم</button><button id="del">حذف</button><button id="all">الكل</button></div>
   <div id="sheet"></div>
   <div id="polybar" style="position:absolute;top:58px;left:50%;transform:translateX(-50%);display:none;gap:6px;background:var(--ui);border:1px solid var(--bd);border-radius:10px;padding:4px;z-index:4"><button id="polyfinish">إنهاء POLYLINE</button><button id="polycancel">إلغاء</button></div>
   <div id="drawInput" aria-live="polite"><div class="dihead"><span id="diTitle">إدخال الرسم</span><button id="diClose" title="إلغاء الرسم">✕</button></div><div class="dihint" id="diHint">أدخل إحداثيات النقطة الأولى أو اخترها من اللوحة</div><div class="dicoords" id="diCoords"><label>الإحداثي X <input id="diX" type="number" step="any" inputmode="decimal" autocomplete="off"></label><label>الإحداثي Y <input id="diY" type="number" step="any" inputmode="decimal" autocomplete="off"></label></div><div class="dicoords" id="diExtra"></div><div class="diunit" id="diUnit"></div><div class="dibtns"><button id="diSubmit">إدخال النقطة</button><button id="diFinish" style="display:none">إنهاء الرسم</button><button id="diCancel">إلغاء</button></div></div>
