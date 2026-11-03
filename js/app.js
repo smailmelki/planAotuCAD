@@ -414,7 +414,7 @@ cv.addEventListener('pointerdown',e=>{
     const i=hit(...p);
     if(i>=0){
       if(e.pointerType==='touch'&&!sel.includes(i)){sel=[i];g=null;upd();draw();return}
-      if(e.pointerType==='touch'&&touchMode==='edit'){g=null;upd();draw();return}
+      if(e.pointerType==='touch'&&touchMode==='edit'){g=null;showDyn(shapes[i]);upd();draw();return}
       if(!sel.includes(i))sel=[i];
       g={k:'move',w0:s2w(...p),o:sel.map(j=>copy(shapes[j])),before:snapStr()}
     }else{sel=[];g={k:'box',a:p}}
