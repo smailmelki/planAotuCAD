@@ -476,7 +476,7 @@ function endPtr(e){
   if(!P.has(e.pointerId))return;const endPoint=pos(e);P.delete(e.pointerId);
   if(g&&e.type==='pointerup'){
     if(g.k==='move'&&g.moved&&!g.numericPlace){
-      const w=s2w(...endPoint),dx=S.grid?grid(w[0]-g.w0[0]):w[0]-g.w0[0],dy=S.grid?grid(w[1]-g.w0[1]):w[1]-g.w0[1];
+      const w=s2w(...endPoint),target=osnap(w)?.p||(S.grid?[grid(w[0]),grid(w[1])]:w),dx=target[0]-g.w0[0],dy=target[1]-g.w0[1];
       sel.forEach((j,n)=>mv(shapes[j],g.o[n],dx,dy));
       sel.forEach((j,n)=>{const s=shapes[j],o=g.o[n];if(s.t==='dim'&&(s.la||s.lb)){s.a=o.a;s.b=o.b;const L=len(o)||1;s.off=o.off+(dx*(-(o.b[1]-o.a[1]))+dy*(o.b[0]-o.a[0]))/L}});
       sel.forEach(j=>{const s=shapes[j];if(s.t==='door'||s.t==='win'){const q=wallAt([s.x,s.y],28/V.s);if(q){s.x=q.q[0];s.y=q.q[1];s.a=q.a;s.th=q.th}}});
@@ -1018,7 +1018,7 @@ function dxfEntities(txt){
       if(c===0&&v==='BLOCK'){block={name:'',baseX:0,baseY:0,entities:[]};blockHeader=true;cur=null;E.blocks.set('',block)}
       else if(c===0&&v==='ENDBLK'){block=null;cur=null;blockHeader=false}
       else if(block&&blockHeader){if(c===2){block.name=v;E.blocks.set(v,block)}else if(c===10)block.baseX=Number(v)||0;else if(c===20)block.baseY=Number(v)||0}
-      else if(block&&c===0){cur={t:v,p:[]};block.entities.push(cur)}
+      else if(block&&c===0){blockHeader=false;cur={t:v,p:[]};block.entities.push(cur)}
       else if(block&&cur)cur.p.push([c,v]);
     }else if(section==='HEADER'){
       if(c===9){
@@ -1063,12 +1063,12 @@ function dxfShapes(E,k){
       }else{
         const clone={t:ent.t,p:ent.p.map(q=>[q[0],q[1]])},vectors=ent.t==='ELLIPSE'?new Set([11]):new Set();
         for(let j=0;j<clone.p.length;j++){
-          const [code,value]=clone.p[j];if(code<10||code>18)continue;const yc=code+10,yi=clone.p.findIndex(q=>q[0]===yc);if(yi<0)continue;
+          const [code,value]=clone.p[j];if(code<10||code>18)continue;const yc=code+10,occ=clone.p.slice(0,j).filter(q=>q[0]===code).length;let seen=0,yi=-1;for(let z=0;z<clone.p.length;z++)if(clone.p[z][0]===yc&&seen++===occ){yi=z;break}if(yi<0)continue;
           const x=Number(value)||0,y=Number(clone.p[yi][1])||0,isVector=vectors.has(code),nx=matrix.a*x+matrix.c*y+(isVector?0:matrix.tx),ny=matrix.b*x+matrix.d*y+(isVector?0:matrix.ty);
           clone.p[j][1]=String(nx);clone.p[yi][1]=String(ny);
         }
         const scale=Math.sqrt(Math.abs(matrix.a*matrix.d-matrix.b*matrix.c));
-        if(scale>0&&Number.isFinite(scale))clone.p=clone.p.map(([c,v])=>[c,(c===40||c===41||c===42)?String(Number(v)*scale):v]);
+        if(scale>0&&Number.isFinite(scale))clone.p=clone.p.map(([c,v])=>[c,c===40?String(Number(v)*scale):v]);
         const rot=Math.atan2(matrix.b,matrix.a)*180/Math.PI;
         if(rot)clone.p=clone.p.map(([c,v])=>[c,(c===50||c===51)?String(Number(v)+rot):v]);
         result.push(clone);
