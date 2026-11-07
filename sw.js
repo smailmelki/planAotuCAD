@@ -1,5 +1,5 @@
 // عامل الخدمة: يجعل التطبيق يعمل بلا إنترنت بعد أول تحميل ناجح.
-const VER='plan-v11';
+const VER='plan-v12';
 const CORE=['./','index.html','css/styles.css','js/utils.js','js/geometry.js','js/app.js','manifest.json','icon-192.png','icon-512.png'];
 
 self.addEventListener('install',event=>{
