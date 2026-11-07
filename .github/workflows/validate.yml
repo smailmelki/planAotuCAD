@@ -1,0 +1,32 @@
+name: Validate application JavaScript
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: |
+          node --check js/app.js
+          node --check js/utils.js
+          node --check js/geometry.js
+      - name: Test number formatting
+        run: |
+          node <<'NODE'
+          global.window = {};
+          require('./js/utils.js');
+          const format = window.PlanCADUtils.formatNumber;
+          const cases = [[1, '1'], [1.2, '1.2'], [1.234, '1.23'], [1.2 + 0.3, '1.5'], [-0.004, '0'], [12.5, '12.5']];
+          for (const [input, expected] of cases) {
+            const actual = format(input);
+            if (actual !== expected) throw new Error(`formatNumber(${input}) expected ${expected}, got ${actual}`);
+          }
+          console.log('formatNumber tests passed');
+          NODE
