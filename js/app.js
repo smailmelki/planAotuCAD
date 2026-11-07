@@ -1174,18 +1174,19 @@ function dxfShapes(E,k){
       polyShape(p,true,e);
     }
     else if(e.t==='HATCH'){
-      let loops=[],loop=null,vertex=null,edgeStart=null;
+      let loops=[],loop=null,vertex=null,edgeStart=null,edgeEnd=null;
       for(const [code,value] of e.p){
-        if(code===92){loop={flags:Number(value)||0,closed:false,verts:[],edges:[]};loops.push(loop);vertex=null;edgeStart=null}
+        if(code===92){loop={flags:Number(value)||0,polyline:!!((Number(value)||0)&2),closed:false,verts:[],edges:[]};loops.push(loop);vertex=null;edgeStart=null;edgeEnd=null}
         else if(!loop)continue;
         else if(code===73)loop.closed=Number(value)!==0;
-        else if(code===10){vertex={x:Number(value)||0,y:0,b:0};loop.verts.push(vertex)}
-        else if(code===20&&vertex)vertex.y=Number(value)||0;
-        else if(code===42&&vertex)vertex.b=Number(value)||0;
-        else if(code===11)edgeStart={x:Number(value)||0,y:0};
-        else if(code===21&&edgeStart)edgeStart.y=Number(value)||0;
-        else if(code===12&&edgeStart){const end={x:Number(value)||0,y:0};loop.edges.push([edgeStart,end]);edgeStart=null}
-        else if(code===22&&loop.edges.length){loop.edges[loop.edges.length-1][1].y=Number(value)||0}
+        else if(code===72)loop.edgeType=Number(value)||0;
+        else if(loop.polyline&&code===10){vertex={x:Number(value)||0,y:0,b:0};loop.verts.push(vertex)}
+        else if(loop.polyline&&code===20&&vertex)vertex.y=Number(value)||0;
+        else if(loop.polyline&&code===42&&vertex)vertex.b=Number(value)||0;
+        else if(!loop.polyline&&loop.edgeType===1&&code===10)edgeStart={x:Number(value)||0,y:0};
+        else if(!loop.polyline&&loop.edgeType===1&&code===20&&edgeStart)edgeStart.y=Number(value)||0;
+        else if(!loop.polyline&&loop.edgeType===1&&code===11)edgeEnd={x:Number(value)||0,y:0};
+        else if(!loop.polyline&&loop.edgeType===1&&code===21&&edgeEnd){edgeEnd.y=Number(value)||0;if(edgeStart)loop.edges.push([edgeStart,edgeEnd]);edgeStart=null;edgeEnd=null}
       }
       for(const path of loops){
         if(path.verts.length>=2){const pts=[];for(let j=0;j<path.verts.length;j++){const a=path.verts[j],b=path.verts[(j+1)%path.verts.length];pts.push([X(a.x),Y(a.y)]);if((j<path.verts.length-1||path.closed)&&a.b)pts.push(...sampleBulge([a.x,a.y],[b.x,b.y],a.b))}polyShape(pts,path.closed,e)}
