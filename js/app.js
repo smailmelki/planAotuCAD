@@ -84,10 +84,10 @@ function xSC(a,c){const[p,q]=a,dx=q[0]-p[0],dy=q[1]-p[1],fx=p[0]-c.x,fy=p[1]-c.y
   if(A<1e-12||D2<0)return[];const r=Math.sqrt(D2);return[(-B-r)/(2*A),(-B+r)/(2*A)].filter(t=>t>=0&&t<=1).map(t=>[p[0]+t*dx,p[1]+t*dy])}
 function xCC(a,b){const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<1e-9||d>a.r+b.r||d<Math.abs(a.r-b.r))return[];
   const l=(a.r*a.r-b.r*b.r+d*d)/(2*d),h=Math.sqrt(Math.max(0,a.r*a.r-l*l)),mx=a.x+l*dx/d,my=a.y+l*dy/d;return[[mx-h*dy/d,my+h*dx/d],[mx+h*dy/d,my-h*dx/d]]}
-function osnap(p){
+function osnap(p,exclude=[]){
   const L=[],add=(q,k,r,ref)=>{if(S[k==='qua'?'cen':k])L.push({p:q,k,r,ref})};
   // نتحقق فقط من الأشكال القريبة من الإصبع: التقاطع قرب النقطة يستلزم أن يمر الشكلان بجوارها
-  const tol=22/V.s+1e-9,near=shapes.filter(s=>{if(!shown(s))return false;const b=bx(s);return p[0]>=b.x-tol&&p[0]<=b.X+tol&&p[1]>=b.y-tol&&p[1]<=b.Y+tol});
+  const tol=22/V.s+1e-9,near=shapes.filter((s,i)=>{if(exclude.includes(i)||!shown(s))return false;const b=bx(s);return p[0]>=b.x-tol&&p[0]<=b.X+tol&&p[1]>=b.y-tol&&p[1]<=b.Y+tol});
   for(const s of near){if(s.t==='text'||s.t==='north'){add([s.x,s.y],'cen',3);continue}
     if(s.t==='circle'){add([s.x,s.y],'cen',3);[[1,0],[-1,0],[0,1],[0,-1]].forEach(d=>add([s.x+d[0]*s.r,s.y+d[1]*s.r],'qua',3))}
     else if(s.t==='free'){add(s.p[0],'end',1);add(s.p[s.p.length-1],'end',1)}
@@ -447,8 +447,9 @@ cv.addEventListener('pointermove',e=>{
     V.s=clamp(g.s*d/g.d,6,400);V.x=m[0]-g.w[0]*V.s;V.y=m[1]-g.w[1]*V.s;
   }else if(g.k==='pan'){V.x=g.vx+p[0]-g.px;V.y=g.vy+p[1]-g.py}
   else if(g.k==='move'){
-    const w=s2w(...p),dx=grid(w[0]-g.w0[0]),dy=grid(w[1]-g.w0[1]);
-    if(!g.moved&&(dx||dy)){g.moved=1;hist.push(g.before)}
+    const w=s2w(...p),dx=w[0]-g.w0[0],dy=w[1]-g.w0[1];
+    const candidate=osnap(w,sel);mk=candidate|| (S.grid?{p:[grid(w[0]),grid(w[1])],k:'grid'}:null);
+    if(!g.moved&&(Math.abs(dx)>1e-9||Math.abs(dy)>1e-9)){g.moved=1;hist.push(g.before)}
     sel.forEach((j,n)=>mv(shapes[j],g.o[n],dx,dy));
     sel.forEach((j,n)=>{const s=shapes[j],o=g.o[n];if(s.t==='dim'&&(s.la||s.lb)){s.a=o.a;s.b=o.b;const L=len(o)||1;s.off=o.off+(dx*(-(o.b[1]-o.a[1]))+dy*(o.b[0]-o.a[0]))/L}});
     sel.forEach(j=>{const s=shapes[j];if(s.t==='door'||s.t==='win'){const q=wallAt([s.x,s.y],28/V.s);if(q){s.x=q.q[0];s.y=q.q[1];s.a=q.a;s.th=q.th}}});
@@ -472,14 +473,20 @@ cv.addEventListener('pointermove',e=>{
   draw();
 });
 function endPtr(e){
-  if(!P.has(e.pointerId))return;P.delete(e.pointerId);
+  if(!P.has(e.pointerId))return;const endPoint=pos(e);P.delete(e.pointerId);
   if(g&&e.type==='pointerup'){
+    if(g.k==='move'&&g.moved&&!g.numericPlace){
+      const w=s2w(...endPoint),target=osnap(w,sel)?.p||(S.grid?[grid(w[0]),grid(w[1])]:w),dx=target[0]-g.w0[0],dy=target[1]-g.w0[1];
+      sel.forEach((j,n)=>mv(shapes[j],g.o[n],dx,dy));
+      sel.forEach((j,n)=>{const s=shapes[j],o=g.o[n];if(s.t==='dim'&&(s.la||s.lb)){s.a=o.a;s.b=o.b;const L=len(o)||1;s.off=o.off+(dx*(-(o.b[1]-o.a[1]))+dy*(o.b[0]-o.a[0]))/L}});
+      sel.forEach(j=>{const s=shapes[j];if(s.t==='door'||s.t==='win'){const q=wallAt([s.x,s.y],28/V.s);if(q){s.x=q.q[0];s.y=q.q[1];s.a=q.a;s.th=q.th}}});
+    }
     if(g.k==='draw'&&cur&&valid(cur)){hist.push(g.before);if(cur.t==='dim')linkDim(cur);shapes.push(cur);sel=[shapes.length-1];showDyn(cur)}
     else if(g.k==='move'&&g.numericPlace&&sel.length){showDyn(shapes[sel[0]])}
     else if(g.k==='box'&&box){
       sel=boxSel();
     }
-  }
+  }else if(g&&e.type==='pointercancel'&&g.k==='move'&&g.moved){sel.forEach((j,n)=>{shapes[j]=copy(g.o[n])})}
   cur=null;g=null;box=null;mk=null;save();upd();draw();
 }
 cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
@@ -1001,13 +1008,19 @@ function dxfEntities(txt){
     P.push([code,a[i+1].trim()]);i+=2;
   }
   if(!P.length)throw new Error('ملف DXF فارغ');
-  const E=[];E.layers=new Map();E.meta={insunits:null,acadver:null};
-  let section='',table='',cur=null;
+  const E=[];E.layers=new Map();E.blocks=new Map();E.meta={insunits:null,acadver:null};
+  let section='',table='',cur=null,block=null,blockHeader=false;
   for(let i=0;i<P.length;i++){
     const [c,v]=P[i];
-    if(c===0&&v==='SECTION'){section=P[i+1]?.[1]||'';table='';cur=null;i++;continue}
-    if(c===0&&v==='ENDSEC'){section='';table='';cur=null;continue}
-    if(section==='HEADER'){
+    if(c===0&&v==='SECTION'){section=P[i+1]?.[1]||'';table='';cur=null;block=null;blockHeader=false;i++;continue}
+    if(c===0&&v==='ENDSEC'){section='';table='';cur=null;block=null;blockHeader=false;continue}
+    if(section==='BLOCKS'){
+      if(c===0&&v==='BLOCK'){block={name:'',baseX:0,baseY:0,entities:[]};blockHeader=true;cur=null;E.blocks.set('',block)}
+      else if(c===0&&v==='ENDBLK'){block=null;cur=null;blockHeader=false}
+      else if(block&&blockHeader){if(c===2){block.name=v;E.blocks.set(v,block);E.blocks.set(v.toUpperCase(),block)}else if(c===10)block.baseX=Number(v)||0;else if(c===20)block.baseY=Number(v)||0}
+      else if(block&&c===0){blockHeader=false;cur={t:v,p:[]};block.entities.push(cur)}
+      else if(block&&cur)cur.p.push([c,v]);
+    }else if(section==='HEADER'){
       if(c===9){
         const key=v;let q=null;
         for(let j=i+1;j<P.length&&P[j][0]!==9;j++){if((key==='$INSUNITS'&&P[j][0]===70)||(key==='$ACADVER'&&P[j][0]===1)){q=P[j];break}}
@@ -1032,6 +1045,38 @@ function dxfEntities(txt){
 }
 function dxfShapes(E,k){
   const out=[],lm=new Map(),skip={},BS=String.fromCharCode(92),COL={1:'#dc2626',2:'#ca8a04',3:'#16a34a',4:'#0d9488',5:'#2563eb',6:'#9333ea',8:'#6b7280',30:'#ea580c'};
+  const compose=(A,B)=>({a:A.a*B.a+A.c*B.b,b:A.b*B.a+A.d*B.b,c:A.a*B.c+A.c*B.d,d:A.b*B.c+A.d*B.d,tx:A.a*B.tx+A.c*B.ty+A.tx,ty:A.b*B.tx+A.d*B.ty+A.ty});
+  const identity={a:1,b:0,c:0,d:1,tx:0,ty:0};
+  const expand=(list,matrix=identity,depth=0)=>{
+    if(depth>8)return[];const result=[];
+    for(const ent of list||[]){
+      const get=(code,def=0)=>{const q=ent.p.find(z=>z[0]===code);return q?Number(q[1]):def};
+      if(ent.t==='INSERT'){
+        const name=String(ent.p.find(z=>z[0]===2)?.[1]||''),blk=E.blocks?.get(name)||E.blocks?.get(name.toUpperCase());if(!blk){skip.INSERT=(skip.INSERT||0)+1;continue}
+        const sx=get(41,1)||1,sy=get(42,sx)||sx,ang=get(50,0)*Math.PI/180,co=Math.cos(ang),si=Math.sin(ang),ix=get(10),iy=get(20);
+        const local={a:sx*co,b:sx*si,c:-sy*si,d:sy*co,tx:ix-sx*co*blk.baseX+sy*si*blk.baseY,ty:iy-sx*si*blk.baseX-sy*co*blk.baseY};
+        const rows=Math.max(1,Math.min(50,Math.round(get(71,1)))),cols=Math.max(1,Math.min(50,Math.round(get(70,1))));
+        for(let rr=0;rr<rows;rr++)for(let cc=0;cc<cols;cc++){
+          const offset={a:1,b:0,c:0,d:1,tx:cc*get(44,0),ty:rr*get(45,0)},nested=compose(matrix,compose(local,offset));
+          result.push(...expand(blk.entities,nested,depth+1));
+        }
+      }else{
+        const clone={t:ent.t,p:ent.p.map(q=>[q[0],q[1]])},vectors=ent.t==='ELLIPSE'?new Set([11]):new Set();
+        for(let j=0;j<clone.p.length;j++){
+          const [code,value]=clone.p[j];if(code<10||code>18)continue;const yc=code+10,occ=clone.p.slice(0,j).filter(q=>q[0]===code).length;let seen=0,yi=-1;for(let z=0;z<clone.p.length;z++)if(clone.p[z][0]===yc&&seen++===occ){yi=z;break}if(yi<0)continue;
+          const x=Number(value)||0,y=Number(clone.p[yi][1])||0,isVector=vectors.has(code),nx=matrix.a*x+matrix.c*y+(isVector?0:matrix.tx),ny=matrix.b*x+matrix.d*y+(isVector?0:matrix.ty);
+          clone.p[j][1]=String(nx);clone.p[yi][1]=String(ny);
+        }
+        const scale=Math.sqrt(Math.abs(matrix.a*matrix.d-matrix.b*matrix.c));
+        if(scale>0&&Number.isFinite(scale))clone.p=clone.p.map(([c,v])=>[c,c===40?String(Number(v)*scale):v]);
+        const rot=Math.atan2(matrix.b,matrix.a)*180/Math.PI;
+        if(rot)clone.p=clone.p.map(([c,v])=>[c,(c===50||c===51)?String(Number(v)+rot):v]);
+        result.push(clone);
+      }
+    }
+    return result;
+  };
+  const source=expand(E);
   const layerColor=nm=>E.layers?.get(nm)?.color||7;
   const lay=nm=>{
     nm=String(nm||'0').slice(0,64);
@@ -1079,8 +1124,8 @@ function dxfShapes(E,k){
     let aEnd=end;while(aEnd<=start)aEnd+=Math.PI*2;
     mk({t:'arc',x:X(cx),y:Y(cy),r:Math.abs(X(r)),a0:start,a1:aEnd},e);
   };
-  for(let i=0;i<E.length&&out.length<30000;i++){
-    const e=E[i];
+  for(let i=0;i<source.length&&out.length<30000;i++){
+    const e=source[i];
     if(e.t==='LINE')mk({t:'line',a:[X(N(e,10)),Y(N(e,20))],b:[X(N(e,11)),Y(N(e,21))]},e);
     else if(e.t==='CIRCLE')mk({t:'circle',x:X(N(e,10)),y:Y(N(e,20)),r:Math.abs(X(N(e,40)))},e);
     else if(e.t==='ARC')arc(N(e,10),N(e,20),Math.abs(N(e,40)),N(e,50),N(e,51),e);
@@ -1101,8 +1146,8 @@ function dxfShapes(E,k){
     }
     else if(e.t==='POLYLINE'){
       const verts=[];let j=i+1;
-      while(j<E.length&&E[j].t==='VERTEX'){verts.push({x:Number(g(E[j],10,0))||0,y:Number(g(E[j],20,0))||0,b:Number(g(E[j],42,0))||0});j++}
-      if(j<E.length&&E[j].t==='SEQEND')j++;
+      while(j<source.length&&source[j].t==='VERTEX'){verts.push({x:Number(g(source[j],10,0))||0,y:Number(g(source[j],20,0))||0,b:Number(g(source[j],42,0))||0});j++}
+      if(j<source.length&&source[j].t==='SEQEND')j++;
       i=j-1;
       const closed=(Number(g(e,70,0))&1)!==0,pts=[];
       for(let q=0;q<verts.length;q++){const a=verts[q],b=verts[(q+1)%verts.length];pts.push([X(a.x),Y(a.y)]);if((q<verts.length-1||closed)&&a.b)pts.push(...sampleBulge([a.x,a.y],[b.x,b.y],a.b))}
@@ -1127,6 +1172,26 @@ function dxfShapes(E,k){
       const p=[[X(N(e,10)),Y(N(e,20))],[X(N(e,11)),Y(N(e,21))],[X(N(e,12)),Y(N(e,22))],[X(N(e,13)),Y(N(e,23))]];
       if(eq(p[2][0],p[3][0])&&eq(p[2][1],p[3][1]))p.pop();
       polyShape(p,true,e);
+    }
+    else if(e.t==='HATCH'){
+      let loops=[],loop=null,vertex=null,edgeStart=null,edgeEnd=null;
+      for(const [code,value] of e.p){
+        if(code===92){loop={flags:Number(value)||0,polyline:!!((Number(value)||0)&2),closed:true,verts:[],edges:[]};loops.push(loop);vertex=null;edgeStart=null;edgeEnd=null}
+        else if(!loop)continue;
+        else if(code===73)loop.closed=Number(value)!==0;
+        else if(code===72)loop.edgeType=Number(value)||0;
+        else if(loop.polyline&&code===10){vertex={x:Number(value)||0,y:0,b:0};loop.verts.push(vertex)}
+        else if(loop.polyline&&code===20&&vertex)vertex.y=Number(value)||0;
+        else if(loop.polyline&&code===42&&vertex)vertex.b=Number(value)||0;
+        else if(!loop.polyline&&loop.edgeType===1&&code===10)edgeStart={x:Number(value)||0,y:0};
+        else if(!loop.polyline&&loop.edgeType===1&&code===20&&edgeStart)edgeStart.y=Number(value)||0;
+        else if(!loop.polyline&&loop.edgeType===1&&code===11)edgeEnd={x:Number(value)||0,y:0};
+        else if(!loop.polyline&&loop.edgeType===1&&code===21&&edgeEnd){edgeEnd.y=Number(value)||0;if(edgeStart)loop.edges.push([edgeStart,edgeEnd]);edgeStart=null;edgeEnd=null}
+      }
+      for(const path of loops){
+        if(path.verts.length>=2){const pts=[];for(let j=0;j<path.verts.length;j++){const a=path.verts[j],b=path.verts[(j+1)%path.verts.length];pts.push([X(a.x),Y(a.y)]);if((j<path.verts.length-1||path.closed)&&a.b)pts.push(...sampleBulge([a.x,a.y],[b.x,b.y],a.b))}polyShape(pts,path.closed,e)}
+        else if(path.edges.length){const pts=[];path.edges.forEach((edge,j)=>{if(!j)pts.push([X(edge[0].x),Y(edge[0].y)]);pts.push([X(edge[1].x),Y(edge[1].y)])});polyShape(pts,path.closed,e)}
+      }
     }
     else if(e.t==='ELLIPSE'){
       const cx=N(e,10),cy=N(e,20),mx=N(e,11),my=N(e,21),ratio=Math.abs(N(e,40)),a0=N(e,41),a1=N(e,42)||Math.PI*2,major=Math.hypot(mx,my);
