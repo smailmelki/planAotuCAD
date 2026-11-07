@@ -1017,7 +1017,7 @@ function dxfEntities(txt){
     if(section==='BLOCKS'){
       if(c===0&&v==='BLOCK'){block={name:'',baseX:0,baseY:0,entities:[]};blockHeader=true;cur=null;E.blocks.set('',block)}
       else if(c===0&&v==='ENDBLK'){block=null;cur=null;blockHeader=false}
-      else if(block&&blockHeader){if(c===2){block.name=v;E.blocks.set(v,block)}else if(c===10)block.baseX=Number(v)||0;else if(c===20)block.baseY=Number(v)||0}
+      else if(block&&blockHeader){if(c===2){block.name=v;E.blocks.set(v,block);E.blocks.set(v.toUpperCase(),block)}else if(c===10)block.baseX=Number(v)||0;else if(c===20)block.baseY=Number(v)||0}
       else if(block&&c===0){blockHeader=false;cur={t:v,p:[]};block.entities.push(cur)}
       else if(block&&cur)cur.p.push([c,v]);
     }else if(section==='HEADER'){
@@ -1052,7 +1052,7 @@ function dxfShapes(E,k){
     for(const ent of list||[]){
       const get=(code,def=0)=>{const q=ent.p.find(z=>z[0]===code);return q?Number(q[1]):def};
       if(ent.t==='INSERT'){
-        const name=String(ent.p.find(z=>z[0]===2)?.[1]||''),blk=E.blocks?.get(name);if(!blk){skip.INSERT=(skip.INSERT||0)+1;continue}
+        const name=String(ent.p.find(z=>z[0]===2)?.[1]||''),blk=E.blocks?.get(name)||E.blocks?.get(name.toUpperCase());if(!blk){skip.INSERT=(skip.INSERT||0)+1;continue}
         const sx=get(41,1)||1,sy=get(42,sx)||sx,ang=get(50,0)*Math.PI/180,co=Math.cos(ang),si=Math.sin(ang),ix=get(10),iy=get(20);
         const local={a:sx*co,b:sx*si,c:-sy*si,d:sy*co,tx:ix-sx*co*blk.baseX+sy*si*blk.baseY,ty:iy-sx*si*blk.baseX-sy*co*blk.baseY};
         const rows=Math.max(1,Math.min(50,Math.round(get(71,1)))),cols=Math.max(1,Math.min(50,Math.round(get(70,1))));
