@@ -1176,7 +1176,7 @@ function dxfShapes(E,k){
     else if(e.t==='HATCH'){
       let loops=[],loop=null,vertex=null,edgeStart=null,edgeEnd=null;
       for(const [code,value] of e.p){
-        if(code===92){loop={flags:Number(value)||0,polyline:!!((Number(value)||0)&2),closed:false,verts:[],edges:[]};loops.push(loop);vertex=null;edgeStart=null;edgeEnd=null}
+        if(code===92){loop={flags:Number(value)||0,polyline:!!((Number(value)||0)&2),closed:true,verts:[],edges:[]};loops.push(loop);vertex=null;edgeStart=null;edgeEnd=null}
         else if(!loop)continue;
         else if(code===73)loop.closed=Number(value)!==0;
         else if(code===72)loop.edgeType=Number(value)||0;
