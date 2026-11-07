@@ -1174,23 +1174,63 @@ function dxfShapes(E,k){
       polyShape(p,true,e);
     }
     else if(e.t==='HATCH'){
-      let loops=[],loop=null,vertex=null,edgeStart=null,edgeEnd=null;
+      const loops=[];let loop=null,vertex=null,edge=null;
       for(const [code,value] of e.p){
-        if(code===92){loop={flags:Number(value)||0,polyline:!!((Number(value)||0)&2),closed:true,verts:[],edges:[]};loops.push(loop);vertex=null;edgeStart=null;edgeEnd=null}
+        if(code===92){loop={flags:Number(value)||0,polyline:!!((Number(value)||0)&2),closed:true,verts:[],edges:[]};loops.push(loop);vertex=null;edge=null}
         else if(!loop)continue;
-        else if(code===73)loop.closed=Number(value)!==0;
-        else if(code===72)loop.edgeType=Number(value)||0;
+        else if(loop.polyline&&code===73)loop.closed=Number(value)!==0;
+        else if(!loop.polyline&&code===72){edge={type:Number(value)||0,p:[]};loop.edges.push(edge)}
         else if(loop.polyline&&code===10){vertex={x:Number(value)||0,y:0,b:0};loop.verts.push(vertex)}
         else if(loop.polyline&&code===20&&vertex)vertex.y=Number(value)||0;
         else if(loop.polyline&&code===42&&vertex)vertex.b=Number(value)||0;
-        else if(!loop.polyline&&loop.edgeType===1&&code===10)edgeStart={x:Number(value)||0,y:0};
-        else if(!loop.polyline&&loop.edgeType===1&&code===20&&edgeStart)edgeStart.y=Number(value)||0;
-        else if(!loop.polyline&&loop.edgeType===1&&code===11)edgeEnd={x:Number(value)||0,y:0};
-        else if(!loop.polyline&&loop.edgeType===1&&code===21&&edgeEnd){edgeEnd.y=Number(value)||0;if(edgeStart)loop.edges.push([edgeStart,edgeEnd]);edgeStart=null;edgeEnd=null}
+        else if(!loop.polyline&&edge)edge.p.push([code,value]);
       }
+      const edgePoints=edge=>{
+        const q=(code,def=0)=>{const z=edge.p.find(v=>v[0]===code);return z?Number(z[1]):def};
+        const add=(x,y)=>[X(x),Y(y)],pts=[];
+        if(edge.type===1){
+          return[add(q(10),q(20)),add(q(11),q(21))];
+        }
+        if(edge.type===2){
+          const cx=q(10),cy=q(20),r=Math.abs(q(40)),a0=q(50)*Math.PI/180,a1=q(51)*Math.PI/180,ccw=q(73,1)!==0;
+          if(!r)return pts;
+          let sweep=a1-a0;
+          if(ccw){while(sweep<=0)sweep+=Math.PI*2}else{while(sweep>=0)sweep-=Math.PI*2}
+          const n=Math.max(2,Math.min(144,Math.ceil(Math.abs(sweep)/(Math.PI/24))));
+          for(let j=0;j<=n;j++){const a=a0+sweep*j/n;pts.push(add(cx+r*Math.cos(a),cy+r*Math.sin(a)))}
+          return pts;
+        }
+        if(edge.type===3){
+          const cx=q(10),cy=q(20),mx=q(11),my=q(21),ratio=Math.abs(q(40)),a0=q(50),a1=q(51),ccw=q(73,1)!==0,major=Math.hypot(mx,my);
+          if(!major||!ratio)return pts;
+          let sweep=a1-a0;
+          if(ccw){while(sweep<=0)sweep+=Math.PI*2}else{while(sweep>=0)sweep-=Math.PI*2}
+          const n=Math.max(2,Math.min(144,Math.ceil(Math.abs(sweep)/(Math.PI/24))));
+          for(let j=0;j<=n;j++){const a=a0+sweep*j/n,co=Math.cos(a),si=Math.sin(a);pts.push(add(cx+mx*co-my*ratio*si,cy+my*co+mx*ratio*si))}
+          return pts;
+        }
+        if(edge.type===4){
+          const xs=edge.p.filter(v=>v[0]===11).map(v=>Number(v[1])||0),ys=edge.p.filter(v=>v[0]===21).map(v=>Number(v[1])||0);
+          if(xs.length>=2&&xs.length===ys.length)return xs.map((x,i)=>add(x,ys[i]));
+        }
+        return pts;
+      };
       for(const path of loops){
-        if(path.verts.length>=2){const pts=[];for(let j=0;j<path.verts.length;j++){const a=path.verts[j],b=path.verts[(j+1)%path.verts.length];pts.push([X(a.x),Y(a.y)]);if((j<path.verts.length-1||path.closed)&&a.b)pts.push(...sampleBulge([a.x,a.y],[b.x,b.y],a.b))}polyShape(pts,path.closed,e)}
-        else if(path.edges.length){const pts=[];path.edges.forEach((edge,j)=>{if(!j)pts.push([X(edge[0].x),Y(edge[0].y)]);pts.push([X(edge[1].x),Y(edge[1].y)])});polyShape(pts,path.closed,e)}
+        if(path.verts.length>=2){
+          const pts=[];
+          for(let j=0;j<path.verts.length;j++){const a=path.verts[j],b=path.verts[(j+1)%path.verts.length];pts.push([X(a.x),Y(a.y)]);if((j<path.verts.length-1||path.closed)&&a.b)pts.push(...sampleBulge([a.x,a.y],[b.x,b.y],a.b))}
+          polyShape(pts,path.closed,e);
+        }else if(path.edges.length){
+          const pts=[];
+          for(const boundary of path.edges){
+            const part=edgePoints(boundary);
+            if(!part.length)continue;
+            if(pts.length&&Math.hypot(pts[pts.length-1][0]-part[0][0],pts[pts.length-1][1]-part[0][1])<1e-5)pts.push(...part.slice(1));
+            else pts.push(...part);
+          }
+          if(path.closed&&pts.length>2&&Math.hypot(pts[0][0]-pts[pts.length-1][0],pts[0][1]-pts[pts.length-1][1])<1e-5)pts.pop();
+          polyShape(pts,path.closed,e);
+        }
       }
     }
     else if(e.t==='ELLIPSE'){
