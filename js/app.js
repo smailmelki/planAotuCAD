@@ -84,10 +84,10 @@ function xSC(a,c){const[p,q]=a,dx=q[0]-p[0],dy=q[1]-p[1],fx=p[0]-c.x,fy=p[1]-c.y
   if(A<1e-12||D2<0)return[];const r=Math.sqrt(D2);return[(-B-r)/(2*A),(-B+r)/(2*A)].filter(t=>t>=0&&t<=1).map(t=>[p[0]+t*dx,p[1]+t*dy])}
 function xCC(a,b){const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<1e-9||d>a.r+b.r||d<Math.abs(a.r-b.r))return[];
   const l=(a.r*a.r-b.r*b.r+d*d)/(2*d),h=Math.sqrt(Math.max(0,a.r*a.r-l*l)),mx=a.x+l*dx/d,my=a.y+l*dy/d;return[[mx-h*dy/d,my+h*dx/d],[mx+h*dy/d,my-h*dx/d]]}
-function osnap(p){
+function osnap(p,exclude=[]){
   const L=[],add=(q,k,r,ref)=>{if(S[k==='qua'?'cen':k])L.push({p:q,k,r,ref})};
   // نتحقق فقط من الأشكال القريبة من الإصبع: التقاطع قرب النقطة يستلزم أن يمر الشكلان بجوارها
-  const tol=22/V.s+1e-9,near=shapes.filter(s=>{if(!shown(s))return false;const b=bx(s);return p[0]>=b.x-tol&&p[0]<=b.X+tol&&p[1]>=b.y-tol&&p[1]<=b.Y+tol});
+  const tol=22/V.s+1e-9,near=shapes.filter((s,i)=>{if(exclude.includes(i)||!shown(s))return false;const b=bx(s);return p[0]>=b.x-tol&&p[0]<=b.X+tol&&p[1]>=b.y-tol&&p[1]<=b.Y+tol});
   for(const s of near){if(s.t==='text'||s.t==='north'){add([s.x,s.y],'cen',3);continue}
     if(s.t==='circle'){add([s.x,s.y],'cen',3);[[1,0],[-1,0],[0,1],[0,-1]].forEach(d=>add([s.x+d[0]*s.r,s.y+d[1]*s.r],'qua',3))}
     else if(s.t==='free'){add(s.p[0],'end',1);add(s.p[s.p.length-1],'end',1)}
@@ -448,7 +448,7 @@ cv.addEventListener('pointermove',e=>{
   }else if(g.k==='pan'){V.x=g.vx+p[0]-g.px;V.y=g.vy+p[1]-g.py}
   else if(g.k==='move'){
     const w=s2w(...p),dx=w[0]-g.w0[0],dy=w[1]-g.w0[1];
-    const candidate=osnap(w);mk=candidate|| (S.grid?{p:[grid(w[0]),grid(w[1])],k:'grid'}:null);
+    const candidate=osnap(w,sel);mk=candidate|| (S.grid?{p:[grid(w[0]),grid(w[1])],k:'grid'}:null);
     if(!g.moved&&(Math.abs(dx)>1e-9||Math.abs(dy)>1e-9)){g.moved=1;hist.push(g.before)}
     sel.forEach((j,n)=>mv(shapes[j],g.o[n],dx,dy));
     sel.forEach((j,n)=>{const s=shapes[j],o=g.o[n];if(s.t==='dim'&&(s.la||s.lb)){s.a=o.a;s.b=o.b;const L=len(o)||1;s.off=o.off+(dx*(-(o.b[1]-o.a[1]))+dy*(o.b[0]-o.a[0]))/L}});
@@ -476,7 +476,7 @@ function endPtr(e){
   if(!P.has(e.pointerId))return;const endPoint=pos(e);P.delete(e.pointerId);
   if(g&&e.type==='pointerup'){
     if(g.k==='move'&&g.moved&&!g.numericPlace){
-      const w=s2w(...endPoint),target=osnap(w)?.p||(S.grid?[grid(w[0]),grid(w[1])]:w),dx=target[0]-g.w0[0],dy=target[1]-g.w0[1];
+      const w=s2w(...endPoint),target=osnap(w,sel)?.p||(S.grid?[grid(w[0]),grid(w[1])]:w),dx=target[0]-g.w0[0],dy=target[1]-g.w0[1];
       sel.forEach((j,n)=>mv(shapes[j],g.o[n],dx,dy));
       sel.forEach((j,n)=>{const s=shapes[j],o=g.o[n];if(s.t==='dim'&&(s.la||s.lb)){s.a=o.a;s.b=o.b;const L=len(o)||1;s.off=o.off+(dx*(-(o.b[1]-o.a[1]))+dy*(o.b[0]-o.a[0]))/L}});
       sel.forEach(j=>{const s=shapes[j];if(s.t==='door'||s.t==='win'){const q=wallAt([s.x,s.y],28/V.s);if(q){s.x=q.q[0];s.y=q.q[1];s.a=q.a;s.th=q.th}}});
@@ -486,7 +486,7 @@ function endPtr(e){
     else if(g.k==='box'&&box){
       sel=boxSel();
     }
-  }
+  }else if(g&&e.type==='pointercancel'&&g.k==='move'&&g.moved){sel.forEach((j,n)=>{shapes[j]=copy(g.o[n])})}
   cur=null;g=null;box=null;mk=null;save();upd();draw();
 }
 cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
